@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Typing Speed Test</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: monospace;
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+      min-height: 100vh;
+      background: #1e1e2e;
+      color: #cdd6f4;
+    }
+
+    .box {
+      width: 90%;
+      max-width: 720px;
+      background: #181825;
+      padding: 25px;
+      border-radius: 10px;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 15px;
+      font-weight: bold;
+    }
+
+    #textDisplay {
+      background: #11111b;
+      padding: 18px;
+      border-radius: 8px;
+      font-size: 1.15rem;
+      line-height: 1.8;
+      user-select: none;
+      cursor: text;
+      max-height: 240px;
+      overflow-y: auto;
+    }
+
+    #textDisplay span {
+      color: #585b70;
+    }
+
+    #textDisplay span.correct {
+      color: #a6e3a1;
+    }
+
+    #textDisplay span.incorrect {
+      color: #f38ba8;
+      background: rgba(243, 139, 168, 0.2);
+    }
+
+    #textDisplay span.active {
+      border-bottom: 2px solid #89b4fa;
+      color: #cdd6f4;
+    }
+
+    #input {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    button {
+      margin-top: 15px;
+      padding: 8px 16px;
+      background: #89b4fa;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    #modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: none;
+      place-items: center;
+    }
+
+    #modal.show {
+      display: grid;
+    }
+
+    .modal-box {
+      width: 90%;
+      max-width: 420px;
+      background: #1e1e2e;
+      padding: 25px;
+      border-radius: 10px;
+      text-align: center;
+      border: 1px solid #45475a;
+    }
+
+    /* New Improvement Feedback Box Styles */
+    .feedback-box {
+      margin-top: 15px;
+      padding: 14px;
+      background: #11111b;
+      border-radius: 8px;
+      border-left: 4px solid #89b4fa;
+      text-align: left;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+
+    .feedback-box.needs-work {
+      border-left-color: #f38ba8;
+    }
+
+    .feedback-box.good {
+      border-left-color: #f9e2af;
+    }
+
+    .feedback-box.great {
+      border-left-color: #a6e3a1;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: bold;
+      font-size: 0.8rem;
+      margin-bottom: 6px;
+      background: #313244;
+      color: #cdd6f4;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="box">
+    <div class="header">
+      <span>Time: <b id="time">60</b>s</span>
+      <span>WPM: <b id="wpm">0</b></span>
+      <span>Accuracy: <b id="acc">100</b>%</span>
+    </div>
+
+    <input type="text" id="input" autofocus autocomplete="off" />
+    <div id="textDisplay"></div>
+
+    <button onclick="reset()">Reset</button>
+  </div>
+
+  <div id="modal">
+    <div class="modal-box">
+      <h2>Results</h2>
+      <p style="margin: 15px 0;" id="resultStats"></p>
+
+      <!-- Score-based Improvement Section -->
+      <div id="feedbackBox" class="feedback-box">
+        <span id="rankBadge" class="badge"></span>
+        <p id="improvementTip"></p>
+      </div>
+
+      <button onclick="reset()">Play Again</button>
+    </div>
+  </div>
+
+  <script>
+    const texts = [
+      "The quick brown fox jumps over the lazy dog as morning sunlight spreads across the valley. High above the hills, birds navigate the cool breeze while rivers wind through dense forest canopies. Practicing regular typing improves rhythm, accuracy, and muscle memory over extended sessions.",
+      "A quick brown fox jumped right over the lazy sleeping dog in the quiet backyard. Without making a single sound, it sprinted past the garden fence into the open fields beyond. Consistent keystrokes and patient focus make every typing session smoother and significantly faster over time.",
+      "The lazy dog watched as the quick brown fox leapt gracefully over the fallen wooden fence. Sunlight filtered through the pine trees while small critters scurried into hiding. Writing clean, deliberate sentences trains your fingers to find every key effortlessly and without hesitation.",
+      "A swift brown fox jumped over the sleepy dog before disappearing into the shadowy woods. The evening breeze rustled the autumn leaves as twilight settled quietly across the horizon. Mastering typing speed is all about steady pacing, minimal corrections, and relaxed coordination."
+    ];
+
+    const display = document.getElementById("textDisplay");
+    const input = document.getElementById("input");
+    const [timeEl, wpmEl, accEl, modal, stats, feedbackBox, rankBadge, improvementTip] = [
+      "time",
+      "wpm",
+      "acc",
+      "modal",
+      "resultStats",
+      "feedbackBox",
+      "rankBadge",
+      "improvementTip"
+    ].map(id => document.getElementById(id));
+
+    let timer = null;
+    let timeLeft = 60;
+    let errors = 0;
+    let lastIndex = -1;
+
+    function load() {
+      display.innerHTML = "";
+
+      let nextIndex;
+      do {
+        nextIndex = Math.floor(Math.random() * texts.length);
+      } while (nextIndex === lastIndex && texts.length > 1);
+      lastIndex = nextIndex;
+
+      [...texts[lastIndex]].forEach(ch => {
+        const span = Object.assign(document.createElement("span"), { textContent: ch });
+        display.appendChild(span);
+      });
+
+      display.children[0]?.classList.add("active");
+    }
+
+    function typing() {
+      const chars = display.querySelectorAll("span");
+      const typed = input.value.split("");
+      errors = 0;
+
+      if (!timer && typed.length) {
+        timer = setInterval(tick, 1000);
+      }
+
+      chars.forEach((span, i) => {
+        const char = typed[i];
+        if (char == null) {
+          span.className = "";
+        } else if (char === span.textContent) {
+          span.className = "correct";
+        } else {
+          span.className = "incorrect";
+          errors++;
+        }
+      });
+
+      chars.forEach(s => s.classList.remove("active"));
+
+      if (typed.length < chars.length) {
+        chars[typed.length].classList.add("active");
+        chars[typed.length].scrollIntoView({ block: "nearest" });
+      }
+
+      const acc = typed.length
+        ? Math.max(0, Math.round(((typed.length - errors) / typed.length) * 100))
+        : 100;
+
+      const wpm = Math.max(
+        0,
+        Math.round(((typed.length - errors) / 5) / ((60 - timeLeft) / 60 || 1))
+      );
+
+      accEl.textContent = acc;
+      wpmEl.textContent = wpm;
+
+      if (typed.length >= chars.length) {
+        finish(wpm, acc);
+      }
+    }
+
+    function tick() {
+      if (--timeLeft >= 0) {
+        timeEl.textContent = timeLeft;
+      } else {
+        finish(Number(wpmEl.textContent), Number(accEl.textContent));
+      }
+    }
+
+    function getFeedback(wpm, acc) {
+      feedbackBox.className = "feedback-box";
+
+      if (acc < 85) {
+        feedbackBox.classList.add("needs-work");
+        rankBadge.textContent = "Focus: Accuracy First";
+        improvementTip.textContent =
+          "Slow down slightly and avoid looking at the keyboard. Fixing mistakes costs more time than typing steadily at a controlled pace.";
+      } else if (wpm < 30) {
+        feedbackBox.classList.add("needs-work");
+        rankBadge.textContent = "Level: Beginner";
+        improvementTip.textContent =
+          "Keep your fingers anchored on the home row (ASDF - JKL;) and practice short daily drills to build muscle memory.";
+      } else if (wpm < 55) {
+        feedbackBox.classList.add("good");
+        rankBadge.textContent = "Level: Intermediate";
+        improvementTip.textContent =
+          "Solid rhythm! Try reading 1–2 words ahead of what you are currently typing so your fingers transition smoothly without pausing.";
+      } else {
+        feedbackBox.classList.add("great");
+        rankBadge.textContent = "Level: Pro Typist";
+        improvementTip.textContent =
+          "Impressive speed and control! Challenge yourself with punctuation-heavy text or longer endurance sessions to push past 70+ WPM.";
+      }
+    }
+
+    function finish(wpm, acc) {
+      clearInterval(timer);
+      input.disabled = true;
+      stats.innerHTML = `Speed: <b>${wpm} WPM</b><br>Accuracy: <b>${acc}%</b><br>Mistakes: <b>${errors}</b>`;
+      getFeedback(wpm, acc);
+      modal.classList.add("show");
+    }
+
+    function reset() {
+      clearInterval(timer);
+      timer = null;
+      timeLeft = 60;
+      errors = 0;
+
+      input.disabled = false;
+      input.value = "";
+
+      timeEl.textContent = 60;
+      wpmEl.textContent = 0;
+      accEl.textContent = 100;
+
+      modal.classList.remove("show");
+      load();
+      input.focus();
+    }
+
+    display.onclick = () => input.focus();
+    input.oninput = typing;
+
+    load();
+  </script>
+</body>
+</html>
